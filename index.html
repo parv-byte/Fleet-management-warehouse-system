@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AMR Fleet Coordination Dashboard</title>
+  <meta name="description" content="Edge-AI Based Distributed AMR Fleet Coordination Simulation — SIH 2026" />
+  <link rel="stylesheet" href="/src/ui/dashboard.css" />
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       APP SHELL — three-row grid: header / workspace / controls
+  ════════════════════════════════════════════════════════════ -->
+  <div id="app-shell">
+
+    <!-- ── 1. TOP HEADER ───────────────────────────────────────── -->
+    <header id="dashboard-header">
+      <div class="header-brand">
+        <span class="header-title">AMR Fleet Coordination Dashboard</span>
+        <span class="header-subtitle">Edge-AI Based Distributed Fleet Coordination</span>
+      </div>
+
+      <div class="header-divider"></div>
+
+      <div class="header-status-indicator">
+        <span class="header-status-dot"></span>
+        Simulation Active
+      </div>
+
+      <div class="header-spacer"></div>
+
+      <span class="header-badge">SIH 2026</span>
+    </header>
+
+    <!-- ── 2. MAIN WORKSPACE ───────────────────────────────────── -->
+    <div id="dashboard-workspace">
+
+      <!-- 2a. MAP WORKSPACE (left) -->
+      <section id="map-workspace" aria-label="Warehouse Map">
+        <!-- Compact 3:2 Map Frame -->
+        <div id="map-frame">
+          <div class="map-viewport-tag">
+            <span class="map-viewport-dot"></span>
+            Warehouse Map · 60 × 40
+          </div>
+
+          <!-- Interactive Viewport Controls (Top Right Overlay) -->
+          <div class="map-viewport-controls" id="map-viewport-controls" aria-label="Map Viewport Controls">
+            <div class="map-controls-btn-row">
+              <button class="map-ctrl-btn" id="btn-zoom-in" title="Zoom In (+)" aria-label="Zoom In">+</button>
+              <button class="map-ctrl-btn" id="btn-zoom-out" title="Zoom Out (−)" aria-label="Zoom Out">−</button>
+            </div>
+            <button class="map-ctrl-btn map-ctrl-btn-reset" id="btn-reset-view" title="Reset View" aria-label="Reset View">Reset</button>
+          </div>
+
+          <!-- Phaser mounts its canvas here — parent: 'game-container' in main.js -->
+          <div id="game-container"></div>
+        </div>
+
+        <!-- Auxiliary Live Fleet Overview Rail (Compact monitoring panel) -->
+        <aside id="fleet-overview-rail" aria-label="Live Fleet Overview">
+          <div class="overview-rail-header">
+            <span class="overview-rail-dot"></span>
+            <span class="overview-rail-title">Live Fleet Overview</span>
+          </div>
+
+          <div class="overview-metric-card">
+            <span class="overview-metric-label">Fleet</span>
+            <span class="overview-metric-val" id="ov-fleet-val">0 <span class="ov-unit">ROBOTS</span></span>
+          </div>
+
+          <div class="overview-metric-grid">
+            <div class="overview-submetric">
+              <span class="overview-submetric-label">Active</span>
+              <span class="overview-submetric-val val-active" id="ov-active-val">0</span>
+            </div>
+            <div class="overview-submetric">
+              <span class="overview-submetric-label">Moving</span>
+              <span class="overview-submetric-val val-moving" id="ov-moving-val">0</span>
+            </div>
+            <div class="overview-submetric">
+              <span class="overview-submetric-label">Idle</span>
+              <span class="overview-submetric-val val-idle" id="ov-idle-val">0</span>
+            </div>
+            <div class="overview-submetric">
+              <span class="overview-submetric-label">Completed</span>
+              <span class="overview-submetric-val val-completed" id="ov-completed-val">0</span>
+            </div>
+          </div>
+
+          <div class="overview-metric-card overview-conflict-card">
+            <span class="overview-metric-label">Conflicts</span>
+            <span class="overview-metric-val val-conflicts" id="ov-conflicts-val">0</span>
+          </div>
+        </aside>
+      </section>
+
+      <!-- 2b. FLEET MANAGEMENT PANEL (right) -->
+      <aside id="fleet-panel" aria-label="Robot Management">
+
+        <!-- Fixed Header -->
+        <div class="panel-header">
+          <span class="panel-title">Robot Management</span>
+        </div>
+
+        <!-- Fixed Top Controls -->
+        <div class="panel-fixed-controls">
+          <div class="fleet-actions-section">
+            <button id="btn-add-robot" class="add-robot-btn" type="button">+ ADD ROBOT</button>
+            <div class="fleet-count-box">
+              <span class="fleet-count-label">FLEET</span>
+              <span id="fleet-count-val" class="fleet-count-val">0 ROBOTS</span>
+            </div>
+          </div>
+          <div id="fleet-limit-notice" class="fleet-limit-notice" style="display: none;">Fleet limit reached</div>
+        </div>
+
+        <!-- Scrollable Management Content -->
+        <div class="panel-scroll-content">
+
+          <!-- Robot selector (Fleet Cards) -->
+          <div class="fleet-section">
+            <span class="section-label">Select Robot</span>
+            <div id="robot-selector">
+              <div class="robot-selector-empty">No robots configured</div>
+            </div>
+          </div>
+
+          <!-- Robot Configuration Section -->
+          <div class="fleet-section" id="robot-config-section">
+            <span class="section-label">Robot Configuration</span>
+
+            <!-- Empty state when selectedRobotId === null -->
+            <div id="config-empty-state" class="config-empty-card">
+              <div class="config-empty-title">No robot selected</div>
+              <div class="config-empty-hint">Select or add a robot to configure.</div>
+            </div>
+
+            <!-- Configuration Form when a robot is selected -->
+            <div id="config-form" class="config-card" style="display: none;">
+              <!-- Header Row: Robot ID & Status -->
+              <div class="config-header-row">
+                <span id="active-robot-name" class="config-robot-name">Robot-01</span>
+                <span id="status-badge" class="config-status-badge">IDLE</span>
+              </div>
+
+              <!-- Speed & Priority -->
+              <div class="config-row-grid">
+                <div class="config-field">
+                  <label for="config-speed-input" class="config-label">Speed (px/s)</label>
+                  <input type="number" id="config-speed-input" class="config-input" min="10" max="500" step="10" value="100" />
+                </div>
+                <div class="config-field">
+                  <label for="config-priority-input" class="config-label">Priority (1–10)</label>
+                  <input type="number" id="config-priority-input" class="config-input" min="1" max="10" step="1" value="1" />
+                </div>
+              </div>
+
+              <!-- Battery -->
+              <div class="config-field">
+                <div class="config-battery-header">
+                  <label for="config-battery-input" class="config-label">Battery</label>
+                  <span id="config-battery-val" class="config-battery-val">100%</span>
+                </div>
+                <input type="range" id="config-battery-input" class="config-slider" min="0" max="100" step="1" value="100" />
+              </div>
+
+              <!-- Task -->
+              <div class="config-field">
+                <label for="config-task-select" class="config-label">Task</label>
+                <select id="config-task-select" class="config-select">
+                  <option value="General Transport">General Transport</option>
+                  <option value="Pickup">Pickup</option>
+                  <option value="Delivery">Delivery</option>
+                  <option value="Warehouse Transfer">Warehouse Transfer</option>
+                  <option value="Priority Delivery">Priority Delivery</option>
+                </select>
+              </div>
+
+              <!-- Positions (Display-Only) -->
+              <div class="config-row-grid">
+                <div class="config-field">
+                  <span class="config-label">Start Position</span>
+                  <div id="config-start-pos" class="config-pos-val">Tile (—, —)</div>
+                </div>
+                <div class="config-field">
+                  <span class="config-label">Destination</span>
+                  <div id="config-dest-pos" class="config-pos-val">Not set</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fleet conflicts -->
+          <div class="fleet-section" id="conflict-section">
+            <div class="conflict-section-header">
+              <span class="section-label">Fleet Conflicts</span>
+              <span id="conflict-count-badge">0</span>
+            </div>
+            <div id="conflict-list">
+              <span style="color: var(--color-text-muted); font-style: italic; font-size: 11px;">No predicted conflicts</span>
+            </div>
+          </div>
+
+          <!-- Run Comparison Section -->
+          <div class="fleet-section" id="comparison-section">
+            <div class="comparison-section-header">
+              <span class="section-label">Run Comparison</span>
+            </div>
+            <div id="comparison-message" class="comparison-hint">
+              Run both modes to compare results.
+            </div>
+            <div id="comparison-content" class="comparison-content" style="display: none;">
+              <table class="comparison-table">
+                <thead>
+                  <tr>
+                    <th class="cmp-col-metric">Metric</th>
+                    <th class="cmp-col-val">BASELINE</th>
+                    <th class="cmp-col-val">OPTIMIZED</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="cmp-row-label">Completion Time</td>
+                    <td class="cmp-val" id="cmp-time-baseline">—</td>
+                    <td class="cmp-val" id="cmp-time-optimized">—</td>
+                  </tr>
+                  <tr>
+                    <td class="cmp-row-label">Distance</td>
+                    <td class="cmp-val" id="cmp-dist-baseline">—</td>
+                    <td class="cmp-val" id="cmp-dist-optimized">—</td>
+                  </tr>
+                  <tr>
+                    <td class="cmp-row-label">Conflicts</td>
+                    <td class="cmp-val" id="cmp-conf-baseline">—</td>
+                    <td class="cmp-val" id="cmp-conf-optimized">—</td>
+                  </tr>
+                  <tr>
+                    <td class="cmp-row-label">Collisions</td>
+                    <td class="cmp-val" id="cmp-coll-baseline">—</td>
+                    <td class="cmp-val" id="cmp-coll-optimized">—</td>
+                  </tr>
+                  <tr>
+                    <td class="cmp-row-label">Completion Rate</td>
+                    <td class="cmp-val" id="cmp-rate-baseline">—</td>
+                    <td class="cmp-val" id="cmp-rate-optimized">—</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="comparison-summaries">
+                <div class="cmp-summary-row">
+                  <span class="cmp-summary-label">Completion Time Improvement:</span>
+                  <span class="cmp-summary-val" id="cmp-imp-time">—</span>
+                </div>
+                <div class="cmp-summary-row">
+                  <span class="cmp-summary-label">Distance Improvement:</span>
+                  <span class="cmp-summary-val" id="cmp-imp-dist">—</span>
+                </div>
+                <div class="cmp-summary-row">
+                  <span class="cmp-summary-label">Conflict Reduction:</span>
+                  <span class="cmp-summary-val" id="cmp-imp-conf">—</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scenarios Section -->
+          <div class="fleet-section" id="scenarios-section">
+            <div class="scenarios-header-row">
+              <span class="section-label">Scenarios</span>
+            </div>
+            <button id="btn-save-scenario" class="scenario-save-action-btn" type="button">SAVE SCENARIO</button>
+            <div id="scenario-active-bar" class="scenario-active-bar" style="display: none;">
+              <div class="active-bar-info">
+                <span class="active-dot"></span>
+                <span class="active-label">Editing:</span>
+                <span id="active-scenario-name" class="active-name">Scenario</span>
+              </div>
+              <button id="btn-save-scenario-changes" class="btn-save-changes" type="button" title="Save fleet changes to this scenario">SAVE CHANGES</button>
+            </div>
+            <div id="scenario-feedback-msg" class="scenario-feedback-msg" style="display: none;"></div>
+            <div class="scenarios-sub-header">
+              <span class="scenarios-sub-label">Saved Scenarios</span>
+            </div>
+            <div id="scenarios-list" class="scenarios-list">
+              <div class="scenario-empty-hint">No saved scenarios</div>
+            </div>
+          </div>
+
+        </div><!-- /.panel-scroll-content -->
+      </aside><!-- /#fleet-panel -->
+
+    </div><!-- /#dashboard-workspace -->
+
+    <!-- ── 3. SIMULATION CONTROLS BAR ─────────────────────────── -->
+    <footer id="simulation-controls">
+      <span class="controls-label">Simulation Controls</span>
+      <div class="controls-divider"></div>
+
+      <!-- Run Mode Selector -->
+      <div class="run-mode-selector" id="run-mode-selector">
+        <span class="run-mode-label">RUN MODE</span>
+        <div class="run-mode-toggle" id="run-mode-toggle" role="group" aria-label="Run Mode">
+          <button class="run-mode-btn run-mode-btn--active" id="btn-mode-baseline" data-mode="BASELINE" type="button" title="Baseline: existing robot movement, no AI coordination">BASELINE</button>
+          <button class="run-mode-btn" id="btn-mode-optimized" data-mode="OPTIMIZED" type="button" title="Optimized: AI coordination enabled (ML integration coming)">OPTIMIZED</button>
+        </div>
+      </div>
+
+      <div class="controls-divider"></div>
+
+      <!-- Run Status Readout (visible after scenario load) -->
+      <div class="run-status-display" id="run-status-display" style="display:none;">
+        <span class="run-status-mode" id="run-status-mode">Mode: BASELINE</span>
+        <span class="run-status-sep">·</span>
+        <span class="run-status-val" id="run-status-val">IDLE</span>
+      </div>
+
+      <div class="controls-group">
+        <button id="start-btn">START</button>
+        <button id="start-all-btn">START ALL</button>
+      </div>
+      <div class="controls-divider"></div>
+      <span class="controls-hint">Click the map to set a destination · Drag robots to reposition</span>
+    </footer>
+
+
+  </div><!-- /#app-shell -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MODALS — Save Scenario & Delete Confirmation
+  ════════════════════════════════════════════════════════════ -->
+  <!-- Save Scenario Modal -->
+  <div id="modal-save-scenario" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="save-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span id="save-modal-title" class="modal-title">Save Scenario</span>
+      </div>
+      <div class="modal-body">
+        <label for="input-scenario-name" class="modal-label">Scenario Name:</label>
+        <input type="text" id="input-scenario-name" class="modal-input" placeholder="e.g. Intersection Test" maxlength="40" autocomplete="off" />
+        <div id="scenario-save-error" class="modal-error" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-save-scenario" class="modal-btn modal-btn-secondary" type="button">CANCEL</button>
+        <button id="btn-confirm-save-scenario" class="modal-btn modal-btn-primary" type="button">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Scenario Modal -->
+  <div id="modal-delete-scenario" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span id="delete-modal-title" class="modal-title">Delete Scenario?</span>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Are you sure you want to delete <strong id="delete-scenario-name">this scenario</strong>? This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-delete-scenario" class="modal-btn modal-btn-secondary" type="button">CANCEL</button>
+        <button id="btn-confirm-delete-scenario" class="modal-btn modal-btn-danger" type="button">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
